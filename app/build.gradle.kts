@@ -11,12 +11,23 @@ android {
         applicationId = "com.raditejp.islandkirim"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0.0"
+        val runNum = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1
+        versionCode = runNum
+        versionName = "1.0.$runNum"
+    }
+
+    signingConfigs {
+        create("release") {
+            storeFile = file("islandkirim.jks")
+            storePassword = System.getenv("KEYSTORE_PASS") ?: "islandkirim123"
+            keyAlias = "islandkirim"
+            keyPassword = System.getenv("KEY_PASS") ?: "islandkirim123"
+        }
     }
 
     buildTypes {
         release {
+            signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
@@ -39,7 +50,6 @@ android {
 }
 
 dependencies {
-    implementation("androidx.documentfile:documentfile:1.0.1")
     implementation(platform("androidx.compose:compose-bom:2024.02.00"))
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-graphics")
@@ -52,4 +62,5 @@ dependencies {
     implementation("androidx.camera:camera-camera2:1.3.1")
     implementation("androidx.camera:camera-lifecycle:1.3.1")
     implementation("androidx.camera:camera-view:1.3.1")
+    implementation("androidx.documentfile:documentfile:1.0.1")
 }

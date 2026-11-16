@@ -14,7 +14,7 @@ import android.os.Build
 import android.os.Environment
 import android.os.IBinder
 import android.os.PowerManager
-import android.provider.DocumentsContract
+import androidx.documentfile.provider.DocumentFile
 import android.provider.MediaStore
 import kotlinx.coroutines.*
 import okhttp3.MediaType.Companion.toMediaType
@@ -394,12 +394,10 @@ class TransferService : Service() {
         val treeStr = KirimSessionStore.saveFolderUri.value
         if (treeStr.isNotEmpty()) {
             try {
-                val treeUri = Uri.parse(treeStr)
-                val docId = DocumentsContract.getTreeDocumentId(treeUri)
-                val parentUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, docId)
-                val created = DocumentsContract.createDocument(contentResolver, parentUri, "application/octet-stream", fileName)
-                if (created != null) {
-                    val out = contentResolver.openOutputStream(created)
+                val tree = DocumentFile.fromTreeUri(this, Uri.parse(treeStr))
+                val doc = tree?.createFile("application/octet-stream", fileName)
+                if (doc != null) {
+                    val out = contentResolver.openOutputStream(doc.uri)
                     if (out != null) return out
                 }
             } catch (_: Throwable) {}
