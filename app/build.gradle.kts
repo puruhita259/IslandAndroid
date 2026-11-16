@@ -28,6 +28,7 @@ android {
     }
     kotlinOptions {
         jvmTarget = "17"
+        freeCompilerArgs += "-XXLanguage:+BreakContinueInInlineLambdas"
     }
     buildFeatures {
         compose = true
@@ -38,6 +39,7 @@ android {
 }
 
 dependencies {
+    implementation("androidx.documentfile:documentfile:1.0.1")
     implementation(platform("androidx.compose:compose-bom:2024.02.00"))
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-graphics")
