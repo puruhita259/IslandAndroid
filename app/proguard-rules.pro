@@ -1,0 +1,1 @@
+# Island Kirim Proguard Rules
