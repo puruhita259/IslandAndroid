@@ -256,7 +256,9 @@ class TransferService : Service() {
                 } catch (e: Throwable) {
                     if (cancelledIds.contains(localId)) return
                     if (retries >= 30) {
+                        val failPct = KirimSessionStore.uploads.value.firstOrNull { it.localId == localId }?.pct ?: 0
                         KirimSessionStore.updateUpload(localId) { it.copy(status = "gagal", message = e.message ?: "Koneksi terputus") }
+                        KirimSessionStore.addHistory(this, HistoryItem(id = offerId ?: localId, arah = "kirim", nama = item.name, ukuran = item.size, waktuMs = System.currentTimeMillis(), perangkat = KirimSessionStore.pcName.value, status = "gagal", penyebab = e.message ?: "Koneksi terputus", persenGagal = failPct, uriStr = item.uri.toString()))
                         updateNotif("Gagal mengirim ${item.name}")
                         return
                     }
@@ -270,6 +272,7 @@ class TransferService : Service() {
 
             if (cancelledIds.contains(localId)) return
             KirimSessionStore.updateUpload(localId) { it.copy(status = "terkirim", pct = 100, message = "Terkirim") }
+            KirimSessionStore.addHistory(this, HistoryItem(id = offerId ?: localId, arah = "kirim", nama = item.name, ukuran = item.size, waktuMs = System.currentTimeMillis(), perangkat = KirimSessionStore.pcName.value, status = "selesai", uriStr = item.uri.toString()))
             updateNotif("Terkirim: ${item.name}")
         } catch (e: Throwable) {
             if (!cancelledIds.contains(localId)) {
@@ -356,7 +359,7 @@ class TransferService : Service() {
                     return
                 }
                 val stream = resp.body?.byteStream() ?: return
-                val outStream = openDownloadOutputStream(fileItem.name)
+                val (outStream, savedUriStr) = openDownloadOutputStream(fileItem.name)
                 stream.use { input ->
                     outStream.use { out ->
                         val buf = ByteArray(65536)
@@ -381,6 +384,7 @@ class TransferService : Service() {
                     KirimSessionStore.updatePcFile(fileId) { it.copy(downloading = false, statusText = "Dibatalkan") }
                 } else {
                     KirimSessionStore.updatePcFile(fileId) { it.copy(downloading = false, progressPct = 100, statusText = "Tersimpan di ${KirimSessionStore.saveFolderLabel.value}") }
+                    KirimSessionStore.addHistory(this, HistoryItem(id = fileId, arah = "terima", nama = fileItem.name, ukuran = fileItem.size, waktuMs = System.currentTimeMillis(), perangkat = KirimSessionStore.pcName.value, status = "selesai", uriStr = savedUriStr))
                     updateNotif("Tersimpan: ${fileItem.name}")
                 }
             }
@@ -389,7 +393,7 @@ class TransferService : Service() {
         }
     }
 
-    private fun openDownloadOutputStream(fileName: String): java.io.OutputStream {
+    private fun openDownloadOutputStream(fileName: String): Pair<java.io.OutputStream, String> {
         KirimSessionStore.loadSaveFolder(this)
         val treeStr = KirimSessionStore.saveFolderUri.value
         if (treeStr.isNotEmpty()) {
@@ -398,7 +402,7 @@ class TransferService : Service() {
                 val doc = tree?.createFile("application/octet-stream", fileName)
                 if (doc != null) {
                     val out = contentResolver.openOutputStream(doc.uri)
-                    if (out != null) return out
+                    if (out != null) return out to doc.uri.toString()
                 }
             } catch (_: Throwable) {}
         }
@@ -408,11 +412,12 @@ class TransferService : Service() {
                 put(MediaStore.Downloads.RELATIVE_PATH, "${Environment.DIRECTORY_DOWNLOADS}/Island Kirim")
             }
             val uri = contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, cv)
-            if (uri != null) return contentResolver.openOutputStream(uri)!!
+            if (uri != null) return contentResolver.openOutputStream(uri)!! to uri.toString()
         }
         val dir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "Island Kirim")
         dir.mkdirs()
-        return FileOutputStream(File(dir, fileName))
+        val file = File(dir, fileName)
+        return FileOutputStream(file) to Uri.fromFile(file).toString()
     }
 
     private suspend fun cancelRemote(localOrOfferId: String) {
@@ -421,6 +426,9 @@ class TransferService : Service() {
         val item = KirimSessionStore.uploads.value.firstOrNull { it.localId == localOrOfferId }
         val oid = item?.offerId
         KirimSessionStore.updateUpload(localOrOfferId) { it.copy(status = "dibatalkan", message = "Dibatalkan") }
+        if (item != null) {
+            KirimSessionStore.addHistory(this, HistoryItem(id = item.offerId ?: item.localId, arah = "kirim", nama = item.name, ukuran = item.size, waktuMs = System.currentTimeMillis(), perangkat = KirimSessionStore.pcName.value, status = "dibatalkan", uriStr = item.uri.toString()))
+        }
         if (base.isNotEmpty() && sid.isNotEmpty() && !oid.isNullOrEmpty()) {
             try {
                 val req = Request.Builder()
