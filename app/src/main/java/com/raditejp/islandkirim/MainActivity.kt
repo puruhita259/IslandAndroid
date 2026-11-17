@@ -91,6 +91,22 @@ class MainActivity : ComponentActivity() {
                 val list = intent.getParcelableArrayListExtra<Uri>(Intent.EXTRA_STREAM)
                 if (list != null) uris.addAll(list)
             }
+            Intent.ACTION_VIEW -> {
+                val dataUri = intent.data
+                val sessionUrl = when {
+                    dataUri == null -> null
+                    dataUri.scheme == "islandkirim" && dataUri.host == "connect" -> dataUri.getQueryParameter("url")
+                    dataUri.scheme == "http" && dataUri.path?.startsWith("/k/") == true -> dataUri.toString()
+                    else -> null
+                }
+                if (!sessionUrl.isNullOrBlank() && sessionUrl.contains("/k/")) {
+                    val svc = Intent(this, TransferService::class.java).apply {
+                        action = TransferService.ACTION_CONNECT
+                        putExtra(TransferService.EXTRA_URL, sessionUrl)
+                    }
+                    ContextCompat.startForegroundService(this, svc)
+                }
+            }
         }
         if (uris.isNotEmpty()) enqueueUris(uris)
     }
